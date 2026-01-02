@@ -8,20 +8,21 @@ type Configurations struct {
 	Port            string
 	Origin          string
 	LoggingLevel    string
+	RedisURL        string
 	DefaultCacheTTL time.Duration
 }
 
-var Config Configurations
+func InitConfig() (*Configurations, error) {
+	var config Configurations
 
-func InitConfig() error {
 	// configuration provided by '.env' file
-	if err := extractFromDotEnv(&Config); err != nil {
-		return err
+	if err := extractFromDotEnv(&config); err != nil {
+		return nil, err
 	}
 	// configuration presented in CLI
-	if err := parseCLI(&Config); err != nil {
-		return err
+	if err := parseCLI(&config); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return &config, nil
 }

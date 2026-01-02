@@ -7,14 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 func extractFromDotEnv(c *Configurations) error {
-	if err := godotenv.Load(".env"); err != nil {
-		return err
-	}
 	c.LoggingLevel = strings.ToLower(os.Getenv("LOGGING_LEVEL"))
 	switch c.LoggingLevel {
 	case "debug", "info", "warning", "error", "critical":
@@ -22,6 +17,11 @@ func extractFromDotEnv(c *Configurations) error {
 		return errors.New("LOGGING_LEVEL is not provided in '.env' file or Environment Variables!")
 	default:
 		return errors.New(`LOGGING_LEVEL options: "debug", "info", "warning", "error", "critical"`)
+	}
+
+	c.RedisURL = os.Getenv("REDIS_URL")
+	if c.RedisURL == "" {
+		return errors.New("REDIS_URL is not provided in '.env' file or Environment Variables!")
 	}
 
 	DEFAULT_CACHE_TTL := os.Getenv("DEFAULT_CACHE_TTL")
