@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 
 	"github.com/joho/godotenv"
 
 	"github.com/hamidgh01/cache-proxy/internal/cache"
 	"github.com/hamidgh01/cache-proxy/internal/conf"
+	"github.com/hamidgh01/cache-proxy/internal/server"
 )
 
 func main() {
@@ -24,4 +27,15 @@ func main() {
 
 	// step_3: initialize redis connection
 	cache.InitRedis(config)
+
+	// step_4: start the proxy server
+	fmt.Printf(
+		"Caching Proxy Server running on port '%s', forwarding to '%s'\n\n",
+		config.Port,
+		config.Origin,
+	)
+	proxyServer := server.NewProxyServer(config)
+	log.Fatal(http.ListenAndServe(":"+config.Port, proxyServer))
+
+	// ToDo: add graceful shutdown
 }
