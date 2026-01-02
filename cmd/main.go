@@ -22,11 +22,6 @@ func main() {
 		panic(fmt.Sprintf("Failed to initial configurations. Error Message: %s", err))
 	}
 
-	fmt.Println("DefaultCacheTTL:", config.DefaultCacheTTL)
-	fmt.Println("Origin:", config.Origin)
-	fmt.Println("Port:", config.Port)
-	fmt.Println("LoggingLevel:", config.LoggingLevel)
-
 	// step_3: initialize redis connection
 	cache.InitRedis(config)
 }
