@@ -17,3 +17,5 @@ go.work
 # custom
 notes.txt
 .env
+*.excalidraw
+*.drawio*
