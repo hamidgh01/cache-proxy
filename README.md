@@ -51,16 +51,16 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
    </p>
 - if cacheable:
    - Check whether a cached response already exists for the request, and... <!-- ([source ref](./internal/server/helpers.go)) -->
-   - if a cached response is found:
-      - Serve response directly from Redis (`X-Cache: CACHE HIT`) ✅ **(cycle ends; next request begins)** <br>
-      log reports:
-      <p align="center">
-         <img src="./docs/2.png" width="90%">
-      </p>
    - if no cached response exists:
       - Forward request to origin server and fetch the response
       - Validate response for cacheability, and cache it if eligible
       - Send back the response to the client (`X-Cache: CACHE MISS`) ✅ **(cycle ends; next request begins)** <br>
+      log reports:
+      <p align="center">
+         <img src="./docs/2.png" width="90%">
+      </p>
+   - if a cached response is found:
+      - Serve response directly from Redis (`X-Cache: CACHE HIT`) ✅ **(cycle ends; next request begins)** <br>
       log reports:
       <p align="center">
          <img src="./docs/3.png" width="90%">
