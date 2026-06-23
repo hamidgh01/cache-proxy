@@ -2,40 +2,35 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net/http"
+	"os"
 
-	"github.com/joho/godotenv"
-
+	"github.com/hamidgh01/cache-proxy/config"
 	"github.com/hamidgh01/cache-proxy/internal/cache"
-	"github.com/hamidgh01/cache-proxy/internal/conf"
 	"github.com/hamidgh01/cache-proxy/internal/server"
+	"github.com/hamidgh01/cache-proxy/pkg/logger"
 )
 
 func main() {
-
-	// step_1: load .env file
-	if err := godotenv.Load(".env"); err != nil {
-		panic(fmt.Sprintf("Failed to load '.env' file. Error Message: %s", err))
-	}
-
-	// step_2: parse CLI args & init configurations
-	config, err := conf.InitConfig()
+	// init configurations
+	config, err := config.InitConfig()
 	if err != nil {
-		panic(fmt.Sprintf("Failed to initial configurations. Error Message: %s", err))
+		fmt.Println("failed to init configurations. reason: ", err)
+		os.Exit(1)
 	}
 
-	// step_3: initialize redis connection
-	cache.InitRedis(config)
+	// setup logger
+	logger := logger.NewLogger(config.LoggerCfg)
 
-	// step_4: start the proxy server
-	fmt.Printf(
-		"Caching Proxy Server running on port '%s', forwarding to '%s'\n\n",
-		config.Port,
-		config.Origin,
-	)
-	proxyServer := server.NewProxyServer(config)
-	log.Fatal(http.ListenAndServe(":"+config.Port, proxyServer))
+	// establish redis connection
+	cache.InitRedis(config.RedisCfg)
+
+	// init and run proxy server
+	proxyServer := server.NewProxyServer(config.ServerCfg, logger)
+	if err := proxyServer.Run(); err != nil {
+		fmt.Println("failed to run cache proxy server. reason: ", err)
+		// close redis
+		os.Exit(1)
+	}
 
 	// ToDo: add graceful shutdown
 }

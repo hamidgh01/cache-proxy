@@ -1,31 +1,48 @@
 package server
 
 import (
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/hamidgh01/cache-proxy/config"
 	"github.com/hamidgh01/cache-proxy/internal/cache"
-	"github.com/hamidgh01/cache-proxy/internal/conf"
+	"github.com/hamidgh01/cache-proxy/pkg/logger"
 )
 
 type ProxyServer struct {
-	OriginDomain string
-	httpClient   *http.Client
+	originUrl  string
+	proxyPort  int
+	httpClient *http.Client
+	logger     *logger.Logger
 }
 
-func NewProxyServer(c *conf.Configurations) *ProxyServer {
+func NewProxyServer(cfg config.ServerConf, l *logger.Logger) *ProxyServer {
 	return &ProxyServer{
-		OriginDomain: c.Origin,
-		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		originUrl:  cfg.Origin,
+		proxyPort:  cfg.Port,
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		logger:     l,
 	}
+}
+
+func (p *ProxyServer) Run() error {
+	address := fmt.Sprintf("localhost:%d", p.proxyPort)
+
+	p.logger.Infof(
+		"running cache proxy server on port '%d', forwarding to '%s'\n",
+		p.proxyPort,
+		p.originUrl,
+	)
+
+	return http.ListenAndServe(address, p)
 }
 
 func (p *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// construct the target URL
-	targetURL := p.OriginDomain + r.URL.String() // String(): Path + Query
-	log.Printf("Received %s request for '%s'", r.Method, targetURL)
+	targetURL := p.originUrl + r.URL.String() // URL.String(): Path + Query
+	p.logger.Infof("Received %s request for '%s'", r.Method, targetURL)
 
 	// if not cacheable -> serve through origin
 	if !isCacheable(r) {
@@ -37,7 +54,7 @@ func (p *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	entry, err := cache.Redis.Fetch(targetURL)
 	if err == nil {
 		p.serveFromCache(w, &entry)
-		log.Printf("'%s %s' is served from cache (CACHE HIT)", r.Method, targetURL) // log.info
+		p.logger.Infof("'%s %s' is served from cache (CACHE HIT)", r.Method, targetURL)
 		return
 	}
 	// if not cached before: get from origin, then cache, and then serve

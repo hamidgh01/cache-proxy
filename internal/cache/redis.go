@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/hamidgh01/cache-proxy/config"
 
-	"github.com/hamidgh01/cache-proxy/internal/conf"
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisIntegration struct {
@@ -19,15 +19,15 @@ type RedisIntegration struct {
 
 var Redis *RedisIntegration
 
-func InitRedis(c *conf.Configurations) {
-	options, err := redis.ParseURL(c.RedisURL)
+func InitRedis(cfg config.RedisConf) {
+	options, err := redis.ParseURL(cfg.Url)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to parse Redis options from REDIS_URL: %v", err))
 	}
 	Redis = &RedisIntegration{
 		redis.NewClient(options),
 		context.Background(),
-		c.DefaultCacheTTL,
+		time.Duration(cfg.DefaultCacheTTL) * time.Minute,
 	}
 
 	// Test the connection
@@ -37,4 +37,9 @@ func InitRedis(c *conf.Configurations) {
 	}
 
 	log.Println("Connected to Redis") // log.info
+}
+
+func CloseRedis() {
+	// to implement
+	// close redis at shutdown to prevent memory leaks
 }

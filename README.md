@@ -1,6 +1,6 @@
 # HTTP Cache Proxy
 
-### Overview :
+### Overview:
 A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redis**), designed to reduce latency and improve throughput by efficiently handling repeated HTTP requests (caching them if cacheable, and serve next incoming repeated requests from cache, until they expire...) in high-traffic systems and applications.
 
 **NOTE :** *This project is just a simulation of a **HTTP Cache Proxy**, and it is developed just for educational purposes. (it doesn't support some of advanced HTTP caching policies)*
@@ -15,28 +15,33 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 - Graceful shutdown support, ensuring in-flight requests are completed and resources (Redis, network listeners) are properly closed
 - Cache hit / miss transparency via X-Cache response headers for easy observability and debugging.
 
-(to understand how this project designed and how it works, see **work cycle explanation** section below)
+(to understand how this project designed and how it works, see [work cycle explanation section](#how-it-works-cache-proxy-work-cycle) below)
 
 <br>
 
 ## Project Structure
 ```text
-├── docs             # Documentation utils
+├── assets           # documentation utils
 ├── cmd/
-│   └── main.go      # Application entry point and bootstrap logic
+│   └── main.go      # application entry point and bootstrap logic
+│
+├── config/          # loading and initialize configurations
+│
 ├── internal/
-│   ├── cache/       # Redis integration + caching logic + CacheEntry
-│   ├── conf/        # Configuration logic (loading from CLI flags and .env file)
-│   ├── log/         # Logger setup and structured logging utilities
+│   ├── cache/       # redis integration + caching logic + CacheEntry
 │   └── server/      # HTTP proxy server, req/resp handling, and helper utils
-├── .env.sample      # Example environment configuration (guide for .env file)
+│
+├── pkg/
+│   └── log/         # logger setup
+│
+├── .env.sample      # environment configuration sample (guide for .env file)
 └── ...
 ```
 
 ## How it works (Cache-Proxy work cycle)
 
 <p align="center">
-  <img src="./docs/flow.svg" width="94%">
+  <img src="./assets/flow.svg" width="94%">
 </p>
 
 ### explanation:
@@ -47,7 +52,7 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
    - Forward request directly to the origin server and serve as-is (`X-Cache: CACHE MISS`) ✅ **(cycle ends; next request begins)** <br>
    log reports:
    <p align="center">
-      <img src="./docs/1.png" width="90%">
+      <img src="./assets/1.png" width="90%">
    </p>
 - if cacheable:
    - Check whether a cached response already exists for the request, and... <!-- ([source ref](./internal/server/helpers.go)) -->
@@ -57,13 +62,13 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
       - Send back the response to the client (`X-Cache: CACHE MISS`) ✅ **(cycle ends; next request begins)** <br>
       log reports:
       <p align="center">
-         <img src="./docs/2.png" width="90%">
+         <img src="./assets/2.png" width="90%">
       </p>
    - if a cached response is found:
       - Serve response directly from Redis (`X-Cache: CACHE HIT`) ✅ **(cycle ends; next request begins)** <br>
       log reports:
       <p align="center">
-         <img src="./docs/3.png" width="90%">
+         <img src="./assets/3.png" width="90%">
       </p>
 
 <br>
