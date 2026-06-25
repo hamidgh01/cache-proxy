@@ -17,7 +17,7 @@ func (p *ProxyServer) forwardToOrigin(
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	sendFinalResponse(w, resp.Header, "MISS", resp.StatusCode, body)
+	sendFinalResponse(w, resp.Header, CACHE_MISS, resp.StatusCode, body)
 	p.logger.Infof("'%s %s' is served through origin (non-cacheable)", r.Method, targetURL)
 }
 
@@ -44,7 +44,7 @@ func (p *ProxyServer) fetchFromOriginAndCacheThenServe(
 	}
 
 	// then send response to client
-	sendFinalResponse(w, resp.Header, "MISS", resp.StatusCode, body)
+	sendFinalResponse(w, resp.Header, CACHE_MISS, resp.StatusCode, body)
 	p.logger.Infof("'%s %s' is served through origin.", r.Method, targetURL)
 }
 
@@ -65,9 +65,16 @@ func (p *ProxyServer) fetchFromOrigin(
 	return response
 }
 
-func sendFinalResponse(w http.ResponseWriter, headers http.Header, XCache string, statusCode int, body []byte) {
+type XCacheHeader string
+
+const (
+	CACHE_HIT  XCacheHeader = "HIT"
+	CACHE_MISS XCacheHeader = "MISS"
+)
+
+func sendFinalResponse(w http.ResponseWriter, headers http.Header, XCache XCacheHeader, statusCode int, body []byte) {
 	maps.Copy(w.Header(), headers)
-	w.Header().Set("X-Cache", XCache)
+	w.Header().Set("X-Cache", string(XCache))
 	w.WriteHeader(statusCode)
 	w.Write(body)
 }

@@ -7,13 +7,13 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 
 ### features:
 - Origin-transparent proxying, acting as a drop-in caching layer without requiring changes to upstream services.
-- Implements **HTTP-aware caching policies** to decide which requests and responses are cacheable. e.g.
+- Implements **HTTP-aware caching policies** to decide which requests and responses are cacheable (check [here](./internal/server/helpers.go)). e.g.
    - Only Response to **GET** Requests are eligible for caching. <!-- ([check here](...) for more... ) -->
    - Responses containing the **Set-Cookie** header (user-specific data) are never cached. <!-- ([check here](...) for more... ) -->
-- CacheEntry abstraction for serializing HTTP responses into Redis, including header normalization and filtering of hop-by-hop headers (e.g. Connection, Transfer-Encoding)
+- CacheEntry abstraction for serializing HTTP responses into Redis, including header normalization and filtering of hop-by-hop headers (e.g. Connection, Transfer-Encoding) (check [here](./internal/cache/))
 - Structured logging with clear request lifecycle reporting (cache hit, cache miss, origin fetch, errors).
 - Graceful shutdown support, ensuring in-flight requests are completed and resources (Redis, network listeners) are properly closed
-- Cache hit / miss transparency via X-Cache response headers for easy observability and debugging.
+- Cache HIT/MISS transparency via X-Cache response headers for easy observability and debugging.
 
 (to understand how this project designed and how it works, see [work cycle explanation section](#how-it-works-cache-proxy-work-cycle) below)
 
@@ -25,20 +25,20 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 ├── cmd/
 │   └── main.go      # application entry point and bootstrap logic
 │
-├── config/          # loading and initialize configurations
+├── config/          # load and initialize configurations
 │
 ├── internal/
-│   ├── cache/       # redis integration + caching logic + CacheEntry
+│   ├── cache/       # CacheService (redis integrated) and CacheEntry
 │   └── server/      # HTTP proxy server, req/resp handling, and helper utils
 │
 ├── pkg/
 │   └── log/         # logger setup
 │
-├── .env.sample      # environment configuration sample (guide for .env file)
+├── .env.sample      # environment configuration sample (guide for `.env` file)
 └── ...
 ```
 
-## How it works (Cache-Proxy work cycle)
+## How it works (Cache-Proxy-Server work cycle)
 
 <p align="center">
   <img src="./assets/flow.svg" width="94%">
@@ -50,39 +50,117 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 - Evaluated each request against cacheability rules <!-- ([source ref](./internal/server/helpers.go)) -->
 - if not cacheable:
    - Forward request directly to the origin server and serve as-is (`X-Cache: CACHE MISS`) ✅ **(cycle ends; next request begins)** <br>
-   log reports:
-   <p align="center">
-      <img src="./assets/1.png" width="90%">
-   </p>
+      server logs:
+      ```txt
+      2026/06/25 16:41:25 [INFO] received 'POST https://jsonplaceholder.typicode.com//posts'
+      2026/06/25 16:41:27 [INFO] 'POST https://jsonplaceholder.typicode.com//posts' is served through origin (non-cacheable)
+      ```
 - if cacheable:
-   - Check whether a cached response already exists for the request, and... <!-- ([source ref](./internal/server/helpers.go)) -->
+   - Check whether a cached response already exists for the request, and...
    - if no cached response exists:
       - Forward request to origin server and fetch the response
       - Validate response for cacheability, and cache it if eligible
       - Send back the response to the client (`X-Cache: CACHE MISS`) ✅ **(cycle ends; next request begins)** <br>
-      log reports:
-      <p align="center">
-         <img src="./assets/2.png" width="90%">
-      </p>
+         server logs:
+         ```txt
+         2026/06/25 16:42:30 [INFO] received 'GET https://jsonplaceholder.typicode.com//posts/10'
+         2026/06/25 16:42:31 [INFO] response for 'GET https://jsonplaceholder.typicode.com//posts/10' cached successfully!
+         2026/06/25 16:42:31 [INFO] 'GET https://jsonplaceholder.typicode.com//posts/10' is served through origin.
+         ```
    - if a cached response is found:
       - Serve response directly from Redis (`X-Cache: CACHE HIT`) ✅ **(cycle ends; next request begins)** <br>
-      log reports:
-      <p align="center">
-         <img src="./assets/3.png" width="90%">
-      </p>
+         server logs:
+         ```txt
+         2026/06/25 16:43:27 [INFO] received 'GET https://jsonplaceholder.typicode.com//posts/10'
+         2026/06/25 16:43:27 [INFO] (CACHE HIT) 'GET https://jsonplaceholder.typicode.com//posts/10' is served from cache
+         ```
 
 <br>
 
 ## Setup and Usage
 
-(This project is under development now. Explanations for this section will be added after completion...)
+- **1. Clone the repository:**
+   ```bash
+   git clone https://github.com/hamidgh01/cache-proxy.git
+   ```
+   or [download the zip file](https://github.com/hamidgh01/cache-proxy/archive/refs/heads/main.zip), and unzip
 
-- ...
-- ...
+- **2. Install dependencies:**
+   ```bash
+   cd cache-proxy
+   go mod tidy
+   ```
 
-<!-- ### Docket setup, and run :
-### Setup from source, and run :
-### Usage : -->
+- **3. Set up your `.env` file:**
+
+   Copy `.env.sample` to `.env`
+
+   ```sh
+   cp .env.sample .env
+   ```
+   and fill in the needed fields (just REDIS_URL) properly.
+
+- **4. Run the server and pass the origin you want to proxy to `-origin` flag:** <br>
+
+   (I recommend `https://jsonplaceholder.typicode.com/` for test)
+
+   ```sh
+   go run ./cmd -origin https://jsonplaceholder.typicode.com/
+   ```
+
+   you should see these log messages:
+
+   ```txt
+   2026/06/25 16:59:27 [INFO] redis connection established successfully.
+   2026/06/25 16:59:27 [INFO] running cache proxy server on port '3000', forwarding to 'https://jsonplaceholder.typicode.com/'
+   ```
+
+   **NOTE:** as you can see, the server will run on the `localhost:3000` by default. <br>
+
+   you can modify the **port** using `-port` flag:
+
+   ```sh
+   go run ./cmd -port 5000 -origin https://jsonplaceholder.typicode.com/
+   ```
+
+   log messages:
+
+   ```txt
+   2026/06/25 17:02:07 [INFO] redis connection established successfully.
+   2026/06/25 17:02:07 [INFO] running cache proxy server on port '5000', forwarding to 'https://jsonplaceholder.typicode.com/'
+   ```
+
+- **5. then request the `path` you want to get from the origin, to your `localhost:port`**
+
+   for example:
+
+   - if you want to request to `https://jsonplaceholder.typicode.com/posts/1`
+   - you should pass `/posts/1` to your `http://localhost:port`
+   - and just request to `http://localhost:port/posts/1`
+
+   **example:**
+
+   **curl**
+
+   ```txt
+   $ curl http://localhost:3000/posts/1
+   {
+   "userId": 1,
+   "id": 1,
+   "title": "sunt aut facere repellat ...",
+   "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ..."
+   }
+   ```
+
+   **NOTE:** use `-v` flag in `curl` to see **X-Cache: MISS** or **X-Cache: HIT** header in curl's verbose result
+
+   **server logs**
+
+   ```txt
+   2026/06/25 17:06:30 [INFO] received 'GET https://jsonplaceholder.typicode.com//posts/1'
+   2026/06/25 17:06:32 [INFO] response for 'GET https://jsonplaceholder.typicode.com//posts/1' cached successfully!
+   2026/06/25 17:06:32 [INFO] 'GET https://jsonplaceholder.typicode.com//posts/1' is served through origin.
+   ```
 
 <br>
 

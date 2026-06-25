@@ -67,7 +67,7 @@ func (p *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	entry, err := p.cacheService.Fetch(p.ctx, targetURL)
 	switch err {
 	case nil: // serve directly from cache
-		sendFinalResponse(w, entry.Headers, "HIT", entry.Status, entry.Body)
+		sendFinalResponse(w, entry.Headers, CACHE_HIT, entry.Status, entry.Body)
 		p.logger.Infof("(CACHE HIT) '%s %s' is served from cache", r.Method, targetURL)
 		return
 	case redis.Nil: // not cached before
