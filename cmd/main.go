@@ -21,11 +21,16 @@ func main() {
 	// setup logger
 	logger := logger.NewLogger(config.LoggerCfg)
 
-	// establish redis connection
-	cache.InitRedis(config.RedisCfg)
+	// init cache service
+	cacheService, closeRedisConn, err := cache.NewCacheService(config.RedisCfg, logger)
+	if err != nil {
+		fmt.Println("failed to init configurations. reason: ", err)
+		os.Exit(1)
+	}
+	defer closeRedisConn()
 
 	// init and run proxy server
-	proxyServer := server.NewProxyServer(config.ServerCfg, logger)
+	proxyServer := server.NewProxyServer(config.ServerCfg, logger, cacheService)
 	if err := proxyServer.Run(); err != nil {
 		fmt.Println("failed to run cache proxy server. reason: ", err)
 		// close redis

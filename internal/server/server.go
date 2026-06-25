@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,21 +9,26 @@ import (
 	"github.com/hamidgh01/cache-proxy/config"
 	"github.com/hamidgh01/cache-proxy/internal/cache"
 	"github.com/hamidgh01/cache-proxy/pkg/logger"
+	"github.com/redis/go-redis/v9"
 )
 
 type ProxyServer struct {
-	originUrl  string
-	proxyPort  int
-	httpClient *http.Client
-	logger     *logger.Logger
+	ctx          context.Context
+	originUrl    string
+	proxyPort    int
+	httpClient   *http.Client
+	cacheService *cache.CacheService
+	logger       *logger.Logger
 }
 
-func NewProxyServer(cfg config.ServerConf, l *logger.Logger) *ProxyServer {
+func NewProxyServer(cfg config.ServerConf, l *logger.Logger, c *cache.CacheService) *ProxyServer {
 	return &ProxyServer{
-		originUrl:  cfg.Origin,
-		proxyPort:  cfg.Port,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		logger:     l,
+		ctx:          context.Background(),
+		originUrl:    cfg.Origin,
+		proxyPort:    cfg.Port,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		cacheService: c,
+		logger:       l,
 	}
 }
 
@@ -38,25 +44,37 @@ func (p *ProxyServer) Run() error {
 	return http.ListenAndServe(address, p)
 }
 
+// how this proxy works ???
+//  1. if incoming requests is not cacheable -> forward and serve through origin
+//  2. if is cacheable
+//     2.1 Cache Lookup: try to get and serve from cache (if cached before)
+//     2.2 if not cached before: get from origin, then cache, and then serve
 func (p *ProxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// construct the target URL
 	targetURL := p.originUrl + r.URL.String() // URL.String(): Path + Query
-	p.logger.Infof("Received %s request for '%s'", r.Method, targetURL)
+	p.logger.Infof("received '%s %s'", r.Method, targetURL)
 
-	// if not cacheable -> serve through origin
+	// 1. if not cacheable -> serve through origin
 	if !isCacheable(r) {
 		p.forwardToOrigin(w, r, targetURL)
 		return
 	}
-	// if cacheable:
-	// try to get and serve from cache (Cache Lookup)
-	entry, err := cache.Redis.Fetch(targetURL)
-	if err == nil {
-		p.serveFromCache(w, &entry)
-		p.logger.Infof("'%s %s' is served from cache (CACHE HIT)", r.Method, targetURL)
+
+	// 2. if cacheable:
+
+	// 2.1 try to get and serve from cache (Cache Lookup)
+	entry, err := p.cacheService.Fetch(p.ctx, targetURL)
+	switch err {
+	case nil: // serve directly from cache
+		sendFinalResponse(w, entry.Headers, "HIT", entry.Status, entry.Body)
+		p.logger.Infof("(CACHE HIT) '%s %s' is served from cache", r.Method, targetURL)
 		return
+	case redis.Nil: // not cached before
+	default: // cached before, but there's CacheService error
+		p.logger.Errorf("failed to serve from cache. reason: %s", err.Error())
 	}
-	// if not cached before: get from origin, then cache, and then serve
-	p.fetchAndCache(w, r, targetURL)
+
+	// 2.2 if not cached before: get from origin, then cache, and then serve
+	p.fetchFromOriginAndCacheThenServe(w, r, targetURL)
 }

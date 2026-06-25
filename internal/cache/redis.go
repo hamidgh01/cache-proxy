@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/hamidgh01/cache-proxy/config"
@@ -11,35 +10,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type RedisIntegration struct {
-	*redis.Client
-	ctx             context.Context
-	DefaultCacheTTL time.Duration
-}
-
-var Redis *RedisIntegration
-
-func InitRedis(cfg config.RedisConf) {
+func initRedis(cfg config.RedisConf) (*redis.Client, error) {
 	options, err := redis.ParseURL(cfg.Url)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to parse Redis options from REDIS_URL: %v", err))
-	}
-	Redis = &RedisIntegration{
-		redis.NewClient(options),
-		context.Background(),
-		time.Duration(cfg.DefaultCacheTTL) * time.Minute,
+		return nil, fmt.Errorf("failed to parse '%s' (provided REDIS_URL) to '*redis.Options'. origin: %w", cfg.Url, err)
 	}
 
-	// Test the connection
-	_, err = Redis.Ping(Redis.ctx).Result()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to connect to Redis: %v", err))
+	redisClient := redis.NewClient(options)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// test the connection
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("redis ping failed. origin: %w", err)
 	}
 
-	log.Println("Connected to Redis") // log.info
-}
-
-func CloseRedis() {
-	// to implement
-	// close redis at shutdown to prevent memory leaks
+	return redisClient, nil
 }

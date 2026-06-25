@@ -2,56 +2,101 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/hamidgh01/cache-proxy/config"
+	"github.com/hamidgh01/cache-proxy/pkg/logger"
+
+	"github.com/redis/go-redis/v9"
 )
 
-type CacheEntry struct {
+type cacheEntry struct {
 	Status  int
 	Headers http.Header
 	Body    []byte
+}
+
+type CacheService struct {
+	redis           *redis.Client
+	defaultCacheTTL time.Duration
+	logger          *logger.Logger
+}
+
+func NewCacheService(cfg config.RedisConf, l *logger.Logger) (*CacheService, func() error, error) {
+	c := &CacheService{
+		defaultCacheTTL: time.Minute * time.Duration(cfg.DefaultCacheTTL),
+		logger:          l,
+	}
+
+	// establish redis connection
+	redisClient, err := initRedis(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	c.logger.Info("redis connection established successfully.")
+	c.redis = redisClient
+
+	return c, c.redis.Close, nil
 }
 
 func generateCacheKey(targetURL string) string {
 	return fmt.Sprintf("CacheProxy:%s", targetURL)
 }
 
-func (r *RedisIntegration) Save(resp *http.Response, respBody []byte, targetURL string) error {
-	// 1. create a CacheEntry from response
-	entry := CacheEntry{
+func (c *CacheService) Save(
+	ctx context.Context, resp *http.Response, respBody []byte, targetURL string, ttl time.Duration,
+) error {
+	// filter hop-by-hop headers
+	cleanedHeaders := filterResponseHeaders(resp.Header)
+
+	// create a CacheEntry from response
+	entry := cacheEntry{
 		Status:  resp.StatusCode,
-		Headers: resp.Header,
+		Headers: cleanedHeaders,
 		Body:    respBody,
 	}
-	// 2. encode to buffer
+
+	// encode to buffer
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(entry); err != nil {
-		return fmt.Errorf("Failed to encode CacheEntry: %v", err)
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(entry); err != nil {
+		return fmt.Errorf("failed to encode CacheEntry: %w", err)
 	}
-	// 3. cache buffered data
+
+	// cache buffered data
 	key := generateCacheKey(targetURL)
-	if err := r.Set(r.ctx, key, buf.Bytes(), r.DefaultCacheTTL).Err(); err != nil {
-		return fmt.Errorf("Failed to save CacheEntry in Redis: %v", err) // log.warning
+	if ttl == 0 {
+		ttl = c.defaultCacheTTL
+	}
+	if err := c.redis.Set(ctx, key, buf.Bytes(), ttl).Err(); err != nil {
+		return fmt.Errorf("failed to save encoded CacheEntry in Redis: %v", err)
 	}
 
 	return nil
 }
 
-func (r *RedisIntegration) Fetch(targetURL string) (CacheEntry, error) {
-	// 1. get bytes from redis
+func (c *CacheService) Fetch(ctx context.Context, targetURL string) (*cacheEntry, error) {
+	// get bytes from redis
 	key := generateCacheKey(targetURL)
-	data, err := r.Get(r.ctx, key).Bytes()
+	data, err := c.redis.Get(ctx, key).Bytes()
 	if err != nil {
-		return CacheEntry{}, err
+		if err == redis.Nil {
+			return nil, err
+		}
+
+		return nil, fmt.Errorf("failed to fetch cached data (ket='%s') from Redis: %w", key, err)
 	}
-	// 2. try to decode fetched bytes to CacheEntry
-	var entry CacheEntry
+
+	// decode fetched bytes to CacheEntry
+	entry := &cacheEntry{}
 	dec := gob.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&entry); err != nil {
-		// log.warning: "failure at decoding cached data to CacheEntry:", err
-		return CacheEntry{}, err
+	if err := dec.Decode(entry); err != nil {
+		return nil, fmt.Errorf("failed to decode fetched data to CacheEntry: %w", err)
 	}
 
 	return entry, nil
