@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/hamidgh01/cache-proxy/config"
@@ -32,7 +35,7 @@ func NewProxyServer(cfg config.ServerConf, l *logger.Logger, c *cache.CacheServi
 	}
 }
 
-func (p *ProxyServer) Run() error {
+func (p *ProxyServer) Run() {
 	address := fmt.Sprintf("localhost:%d", p.proxyPort)
 
 	p.logger.Infof(
@@ -41,7 +44,35 @@ func (p *ProxyServer) Run() error {
 		p.originUrl,
 	)
 
-	return http.ListenAndServe(address, p)
+	serverError := make(chan error, 1)
+
+	httpServer := &http.Server{Addr: address, Handler: p}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil {
+			serverError <- err
+		}
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case <-sigChan:
+		p.logger.Info("shutdown signal received...")
+	case err := <-serverError:
+		fmt.Println("failed to run cache proxy server. reason: ", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		p.logger.Errorf("there's error while shutting down the server: %s", err.Error())
+		return
+	}
+
+	p.logger.Info("server shutdown gracefully!")
 }
 
 // how this proxy works ???

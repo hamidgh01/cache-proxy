@@ -34,13 +34,16 @@ func (p *ProxyServer) fetchFromOriginAndCacheThenServe(
 
 	// first cache the response (if cacheable)
 	if isCacheable, cacheTTl := isResponseCacheable(resp); isCacheable {
-		if err := p.cacheService.Save(p.ctx, resp, body, targetURL, cacheTTl); err != nil {
-			p.logger.Errorf(
-				"failed to cache response for '%s %s'. error message: %s", r.Method, targetURL, err,
-			)
-		} else {
-			p.logger.Infof("response for '%s %s' cached successfully!", r.Method, targetURL)
-		}
+		go func() {
+			err := p.cacheService.Save(p.ctx, resp, body, targetURL, cacheTTl)
+			if err != nil {
+				p.logger.Errorf(
+					"failed to cache response for '%s %s'. error message: %s", r.Method, targetURL, err,
+				)
+			} else {
+				p.logger.Infof("response for '%s %s' cached successfully!", r.Method, targetURL)
+			}
+		}()
 	}
 
 	// then send response to client

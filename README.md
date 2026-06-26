@@ -80,13 +80,13 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 ## Setup and Usage
 
 - **1. Clone the repository:**
-   ```bash
+   ```sh
    git clone https://github.com/hamidgh01/cache-proxy.git
    ```
    or [download the zip file](https://github.com/hamidgh01/cache-proxy/archive/refs/heads/main.zip), and unzip
 
 - **2. Install dependencies:**
-   ```bash
+   ```sh
    cd cache-proxy
    go mod tidy
    ```
@@ -142,7 +142,7 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 
    **curl**
 
-   ```txt
+   ```sh
    $ curl http://localhost:3000/posts/1
    {
    "userId": 1,
@@ -152,7 +152,7 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
    }
    ```
 
-   **NOTE:** use `-v` flag in `curl` to see **X-Cache: MISS** or **X-Cache: HIT** header in curl's verbose result
+   **NOTE:** use `-v` flag with `curl` to see **X-Cache: MISS** or **X-Cache: HIT** header in curl's verbose result
 
    **server logs**
 

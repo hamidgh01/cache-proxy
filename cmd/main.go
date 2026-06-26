@@ -31,11 +31,5 @@ func main() {
 
 	// init and run proxy server
 	proxyServer := server.NewProxyServer(config.ServerCfg, logger, cacheService)
-	if err := proxyServer.Run(); err != nil {
-		fmt.Println("failed to run cache proxy server. reason: ", err)
-		// close redis
-		os.Exit(1)
-	}
-
-	// ToDo: add graceful shutdown
+	proxyServer.Run()
 }
