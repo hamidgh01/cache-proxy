@@ -1,11 +1,13 @@
 # HTTP Cache Proxy
 
 ### Overview:
+
 A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redis**), designed to reduce latency and improve throughput by efficiently handling repeated HTTP requests (caching them if cacheable, and serve next incoming repeated requests from cache, until they expire...) in high-traffic systems and applications.
 
 **NOTE :** *This project is just a simulation of a **HTTP Cache Proxy**, and it is developed just for educational purposes. (it doesn't support some of advanced HTTP caching policies)*
 
 ### features:
+
 - Origin-transparent proxying, acting as a drop-in caching layer without requiring changes to upstream services.
 - Implements **HTTP-aware caching policies** to decide which requests and responses are cacheable (check [here](./internal/server/helpers.go)). e.g.
    - Only Response to **GET** Requests are eligible for caching. <!-- ([check here](...) for more... ) -->
@@ -20,7 +22,8 @@ A simple and lightweight HTTP Caching-Proxy (written in **Go**, backed by **Redi
 <br>
 
 ## Project Structure
-```text
+
+```sh
 ├── assets           # documentation utils
 ├── cmd/
 │   └── main.go      # application entry point and bootstrap logic

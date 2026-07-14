@@ -42,8 +42,6 @@ type Logger struct {
 
 func NewLogger(cfg config.LoggerConf) *Logger {
 
-	log.Default()
-
 	output := os.Stdout
 	if cfg.OutputFile != "" {
 		file, err := os.OpenFile(cfg.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
